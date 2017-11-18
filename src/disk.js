@@ -1,17 +1,8 @@
 import exception from "./exception";
 
-export default class Store {
+export default class Disk {
   constructor(fsTree) {
     this.fsTree = fsTree;
-  }
-
-  toAbsolutePath(path) {
-    const absPath = /^\//.test(path)
-      ? path
-      : /^\.\//.test(path)
-        ? `${currentDir}/${path.substring(2)}`
-        : `${currentDir}/${path}`;
-    return absPath.replace(/\/$/, "");
   }
 
   getNodeName(path) {
@@ -54,18 +45,22 @@ export default class Store {
     return Array.isArray(obj.contents);
   }
 
+  close() {
+    this.status = "CLOSED";
+  }
+
   /*
     Create a file.
   */
-  createFile(_path, contents, options = { overwrite: true }) {
-    return isValidFilePath(_path)
+  createFile(path, contents, options = { overwrite: true }) {
+    return this.isValidFilePath(path)
       ? (() => {
-          const path = this.toAbsolutePath(_path);
           const parentPath = this.getParentPath(path);
           const dir = this.getDir(parentPath);
+          debugger
           return dir
             ? (() => {
-                const filename = getFilename(path);
+                const filename = this.getFilename(path);
 
                 return !dir.contents.find(x => x.name === filename) ||
                   options.overwrite
@@ -86,56 +81,9 @@ export default class Store {
   }
 
   /*
-    Read a file.
-  */
-  readFile(_path) {
-    return isValidFilePath(_path)
-      ? (() => {
-          const path = this.toAbsolutePath(_path);
-          const node = this.getNode(path);
-          return node && !isDir(node)
-            ? node.contents
-            : exception(`The path ${path} does not exist.`);
-        })()
-      : exception(`Invalid filename ${_path}.`);
-  }
-
-  /*
-    Read a directory
-  */
-  readDir(_path) {
-    const path = this.toAbsolutePath(_path);
-    const dir = this.getDir(path);
-    return dir
-      ? dir.contents.map(x => `${path}/${x.name}`)
-      : exception(`The path ${path} does not exist.`);
-  }
-
-  /*
-    Read a directory recursively.
-  */
-  readDirRecursive(_path) {
-    function read(dir, path) {
-      return dir.contents.reduce((acc, x) => {
-        const childPath = `${path}/${x.name}`;
-        const inner = this.isDir(x)
-          ? [childPath].concat(read(x, childPath))
-          : [childPath];
-        return acc.concat(inner);
-      }, []);
-    }
-
-    const path = this.toAbsolutePath(_path);
-    const dir = this.getDir(path);
-    return read(dir, path);
-  }
-
-  /*
     Create a directory. Similar to mkdir.
   */
-  createDir(_path, options = { parents: true }) {
-    const path = this.toAbsolutePath(_path);
-
+  createDir(path, options = { parents: true }) {
     const pathToParent = this.getParentPath(path);
     const newDirName = this.getNodeName(path);
 
@@ -174,23 +122,9 @@ export default class Store {
   }
 
   /*
-    Delete a directory or file. Similar to rm -f.
-  */
-  remove(_path) {
-    const path = this.toAbsolutePath(_path);
-    const parentPath = this.getParentPath(path);
-    const nodeName = this.getNodeName(path);
-    const parent = this.getDir(parentPath);
-    parent.contents = parent.contents.filter(x => x.name !== nodeName);
-  }
-
-  /*
     Move a directory or file. Similar to mv.
   */
-  move(_path, _newPath, options = { overwrite: false }) {
-    const path = this.toAbsolutePath(_path);
-    const newPath = this.toAbsolutePath(_newPath);
-
+  move(path, newPath, options = { overwrite: false }) {
     return !newPath.startsWith(path)
       ? (() => {
           const source = this.getNode(path);
@@ -217,7 +151,7 @@ export default class Store {
                   : newNode
                     ? (() => {
                         // If path and newPath are both files overwrite it.
-                        return !isDir(source)
+                        return !this.isDir(source)
                           ? (() => {
                               const parentDir = this.getDir(
                                 getParentPath(newPath)
@@ -251,5 +185,63 @@ export default class Store {
             : exception(`The path ${nodeName} does not exist.`);
         })()
       : exception(`Cannot move to the same path ${path}.`);
+  }
+
+  open() {
+    this.status = "OPEN";
+    return this;
+  }
+
+  /*
+    Read a file.
+  */
+  readFile(path) {
+    return this.isValidFilePath(path)
+      ? (() => {
+          const node = this.getNode(path);
+          return node && !this.isDir(node)
+            ? node.contents
+            : exception(`The path ${path} does not exist.`);
+        })()
+      : exception(`Invalid filename ${_path}.`);
+  }
+
+  /*
+    Read a directory
+  */
+  readDir(path) {
+    const dir = this.getDir(path);
+    return dir
+      ? dir.contents.map(x => `${path}/${x.name}`)
+      : exception(`The path ${path} does not exist.`);
+  }
+
+  /*
+    Read a directory recursively.
+  */
+  readDirRecursive(path) {
+    const self = this;
+    function read(dir, path) {
+      return dir.contents.reduce((acc, x) => {
+        const childPath = `${path}/${x.name}`;
+        const inner = self.isDir(x)
+          ? [childPath].concat(read(x, childPath))
+          : [childPath];
+        return acc.concat(inner);
+      }, []);
+    }
+
+    const dir = this.getDir(path);
+    return read(dir, path);
+  }
+
+  /*
+    Delete a directory or file. Similar to rm -f.
+  */
+  remove(path) {
+    const parentPath = this.getParentPath(path);
+    const nodeName = this.getNodeName(path);
+    const parent = this.getDir(parentPath);
+    parent.contents = parent.contents.filter(x => x.name !== nodeName);
   }
 }

@@ -12,5 +12,5 @@ export async function open(diskName) {
 }
 
 export function __data(diskName) {
-  return disks[diskName].disks;
+  return disks[diskName].fsTree;
 }
