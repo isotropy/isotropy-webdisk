@@ -88,7 +88,7 @@ export default class Disk {
     const newDirName = this.getNodeName(path);
 
     const parent = !options.parents
-      ? getDir(pathToParent)
+      ? this.getDir(pathToParent)
       : (() => {
           const partsToParent = pathToParent.split("/").slice(1);
           return partsToParent.reduce(
@@ -125,13 +125,14 @@ export default class Disk {
     Move a directory or file. Similar to mv.
   */
   move(path, newPath, options = { overwrite: false }) {
+    const self = this;
     return !newPath.startsWith(path)
       ? (() => {
           const source = this.getNode(path);
 
           function deleteOriginal() {
-            const parentDir = this.getDir(getParentPath(path));
-            const nodeName = this.getNodeName(path);
+            const parentDir = self.getDir(self.getParentPath(path));
+            const nodeName = self.getNodeName(path);
             parentDir.contents = parentDir.contents.filter(
               x => x.name !== nodeName
             );
@@ -154,7 +155,7 @@ export default class Disk {
                         return !this.isDir(source)
                           ? (() => {
                               const parentDir = this.getDir(
-                                getParentPath(newPath)
+                                this.getParentPath(newPath)
                               );
                               parentDir.contents = parentDir.contents.filter(
                                 x => x.name !== newNodeName
@@ -170,7 +171,7 @@ export default class Disk {
                     : (() => {
                         //No such file or directory
                         //Check if parent exists.
-                        const parentDir = this.getDir(getParentPath(newPath));
+                        const parentDir = this.getDir(this.getParentPath(newPath));
                         return parentDir
                           ? (() => {
                               parentDir.contents = parentDir.contents.concat({
