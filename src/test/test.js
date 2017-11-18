@@ -2,7 +2,6 @@ import should from "should";
 import * as babel from "babel-core";
 import sourceMapSupport from "source-map-support";
 import * as webdisk from "../isotropy-webdisk";
-import { log } from "util";
 
 sourceMapSupport.install();
 
