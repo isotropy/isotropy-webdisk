@@ -57,7 +57,6 @@ export default class Disk {
       ? (() => {
           const parentPath = this.getParentPath(path);
           const dir = this.getDir(parentPath);
-          debugger
           return dir
             ? (() => {
                 const filename = this.getFilename(path);
