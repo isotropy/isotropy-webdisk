@@ -1,64 +1,144 @@
 # isotropy-filesystem
 Browser side lib for emulating the file system.
 
-```javascript
-//my-filesystem.js
-import fs from "isotropy-lib-filesystem";
-
-fs.init([
-  {
-    name: "home",
-    contents: [
-      {
-        name: "docs",
-        contents: [
-          {
-            type: "file",
-            name: "report.txt",
-            contents: "2017: 200; 2016: 150"
-          },
-          {
-            name: "old-report.txt",
-            contents: "2017: 220; 2016: 100"
-          }
-        ]
-      },
-      {
-        name: "placeholder.txt",
-        contents: "This is empty."
-      }
-    ]
-  }
-])
-```
-
-You should then be able to query from anywhere else.
+### Setup
 
 ```javascript
-import fs from "./my-filesystem";
+const tree = {
+  name: "/",
+  contents: [
+    {
+      name: "docs",
+      contents: []
+    },
+    {
+      name: "pics",
+      contents: [
+        { name: "asterix.jpg", contents: "FFh D8h asterix" },
+        { name: "obelix.jpg", contents: "FFh D8h obelix" },
+        {
+          name: "large-pics",
+          contents: [
+            {
+              name: "asterix-large.jpg",
+              contents: "FFh D8h asterix"
+            },
+            {
+              name: "obelix-large.jpg",
+              contents: "FFh D8h obelix"
+            },
+            {
+              name: "backup",
+              contents: [
+                {
+                  name: "asterix-large-bak.jpg",
+                  contents: "FFh D8h asterix"
+                },
+                {
+                  name: "obelix-large-bak.jpg",
+                  contents: "FFh D8h obelix"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+};
 
-//Read a file
-//Create a file
-fs.createFile("/home/reports/report-2015.txt", "2015: 40");
-
-// returns { type: "file", name: "report-2015.txt", contents: "2015: 40" } 
-fs.readFile("/home/reports/report-2015.txt");
-
-//Update a file
-fs.updateFile("/home/reports/report-2015.txt", "2015: 60");
-
-//Read a directory
-fs.readDir("/home/reports");
-
-//Read dir recursively
-fs.readDirRecursive("/home")
-
-//Create a directory
-fs.createDir("/home/reports/older");
-
-//Move a file or dir
-fs.move("/home/reports/older", "/home/reports/archived");
-
-//Delete dir
-fs.remove("/home/reports/archived")
+webdisk.init("testdisk", tree);
 ```
+
+### API
+
+Creates a file
+
+```javascript
+const disk = await webdisk.open("testdisk");
+await disk.createFile("/docs/report.txt", "Pluto is a planet.");
+```
+
+Creates or overwrites a file
+
+```javascript
+const path = "/docs/report.txt";
+const filename = "report.txt";
+const disk = await webdisk.open("testdisk");
+await disk.createFile(path, "Pluto is a planet.", { overwrite: true });
+```
+
+Reads a file
+
+```javascript
+const path = "/docs/report.txt";
+const filename = "report.txt";
+const disk = await webdisk.open("testdisk");
+const contents = await disk.readFile(path);
+```
+
+Reads a directory
+
+```javascript
+const path = "/pics";
+const disk = await webdisk.open("testdisk");
+const files = await disk.readDir(path);
+files.should.deepEqual([
+  "/pics/asterix.jpg",
+  "/pics/obelix.jpg",
+  "/pics/large-pics"
+]);
+```
+
+Reads a directory recursively
+
+```javascript
+const path = "/pics";
+const disk = await webdisk.open("testdisk");
+const files = await disk.readDirRecursive(path);
+files.should.deepEqual([
+  "/pics/asterix.jpg",
+  "/pics/obelix.jpg",
+  "/pics/large-pics",
+  "/pics/large-pics/asterix-large.jpg",
+  "/pics/large-pics/obelix-large.jpg",
+  "/pics/large-pics/backup",
+  "/pics/large-pics/backup/asterix-large-bak.jpg",
+  "/pics/large-pics/backup/obelix-large-bak.jpg"
+]);
+```
+
+Creates a directory
+
+```javascript
+const path = "/pics/secret";
+const disk = await webdisk.open("testdisk");
+await disk.createDir(path);
+```
+
+Removes a file or directory
+
+```javascript
+const path = "/pics";
+const disk = await webdisk.open("testdisk");
+await disk.remove(path);
+```
+
+Moves a file or directory
+
+```javascript
+const path = "/pics/large-pics/backup";
+const newPath = "/";
+const disk = await webdisk.open("testdisk");
+await disk.move(path, newPath);
+```
+
+Renames a file or directory
+
+```javascript
+const path = "/pics/large-pics/backup";
+const newPath = "/pics/large-pics/storage";
+const disk = await webdisk.open("testdisk");
+await disk.move(path, newPath);
+```
+
