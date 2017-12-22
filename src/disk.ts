@@ -1,19 +1,24 @@
 import exception from "./exception";
+import { FileNode, DirNode, TreeNode } from "./isotropy-webdisk";
+import { EISDIR } from "constants";
 
 export default class Disk {
-  constructor(fsTree) {
+  fsTree: DirNode;
+  status: string;
+
+  constructor(fsTree: DirNode) {
     this.fsTree = fsTree;
   }
 
-  getNodeName(path) {
+  getNodeName(path: string) {
     return path.split("/").slice(-1)[0];
   }
 
-  getNode(path) {
+  getNode(path: string): TreeNode | undefined {
     const parts = path.split("/").slice(1);
 
     return parts.reduce(
-      (acc, part) =>
+      (acc: TreeNode | undefined, part) =>
         acc && this.isDir(acc)
           ? acc.contents.find(x => x.name === part)
           : undefined,
@@ -21,28 +26,34 @@ export default class Disk {
     );
   }
 
-  getDir(path) {
+  getDir(path: string): DirNode | never {
     const node = this.getNode(path);
-    return node && this.isDir(node) ? node : undefined;
+    return node && this.isDir(node)
+      ? node
+      : exception(`The path ${path} was not found.`);
   }
 
-  isValidFilePath(path) {
+  isValidFilePath(path: string) {
     return !/\/$/.test(path);
   }
 
-  getParentPath(path) {
+  getParentPath(path: string) {
     return path
       .split("/")
       .slice(0, -1)
       .join("/");
   }
 
-  getFilename(path) {
+  getFilename(path: string) {
     return this.getNodeName(path);
   }
 
-  isDir(obj) {
-    return Array.isArray(obj.contents);
+  isDir(obj: TreeNode | undefined): obj is DirNode {
+    return typeof obj !== "undefined" && Array.isArray(obj.contents);
+  }
+
+  ensureDir(obj: any): DirNode | never {
+    return this.isDir(obj) ? obj : exception(`The node is not a directory.`);
   }
 
   close() {
@@ -52,7 +63,7 @@ export default class Disk {
   /*
     Create a file.
   */
-  createFile(path, contents, options = { overwrite: true }) {
+  createFile(path: string, contents: string, options = { overwrite: true }) {
     return this.isValidFilePath(path)
       ? (() => {
           const parentPath = this.getParentPath(path);
@@ -76,13 +87,14 @@ export default class Disk {
               })()
             : exception(`The path ${parentPath} does not exist.`);
         })()
-      : exception(`Invalid filename ${_path}.`);
+      : exception(`Invalid filename ${path}.`);
   }
 
   /*
     Create a directory. Similar to mkdir.
   */
-  createDir(path, options = { parents: true }) {
+  createDir(path: string, options = { parents: true }) {
+    const self = this;
     const pathToParent = this.getParentPath(path);
     const newDirName = this.getNodeName(path);
 
@@ -91,17 +103,19 @@ export default class Disk {
       : (() => {
           const partsToParent = pathToParent.split("/").slice(1);
           return partsToParent.reduce(
-            (acc, item) =>
-              acc.contents.find(x => x.name === item)
-                ? this.isDir(acc)
-                  ? acc.contents.find(x => x.name === item)
-                  : exception(`The path ${path} already exists.`)
-                : (() => {
-                    const newDir = { name: item, contents: [] };
-                    acc.contents = acc.contents.filter(x => x.name !== item);
-                    acc.contents.concat(newDir);
-                    return newDir;
-                  })(),
+            (acc: TreeNode, item: string): TreeNode =>
+              self.isDir(acc)
+                ? acc.contents.find(x => x.name === item)
+                  ? this.isDir(acc)
+                    ? this.ensureDir(acc.contents.find(x => x.name === item))
+                    : exception(`The path ${path} already exists.`)
+                  : (() => {
+                      const newDir: DirNode = { name: item, contents: [] };
+                      acc.contents = acc.contents.filter(x => x.name !== item);
+                      acc.contents.concat(newDir);
+                      return newDir;
+                    })()
+                : exception(`The path ${pathToParent} is a file.`),
             this.fsTree
           );
         })();
@@ -123,14 +137,14 @@ export default class Disk {
   /*
     Move a directory or file. Similar to mv.
   */
-  move(path, newPath, options = { overwrite: false }) {
+  move(path: string, newPath: string, options = { overwrite: false }) {
     const self = this;
     return !newPath.startsWith(path)
       ? (() => {
           const source = this.getNode(path);
 
           function deleteOriginal() {
-            const parentDir = self.getDir(self.getParentPath(path));
+            const parentDir = self.getDir(self.getParentPath(path)) as DirNode;
             const nodeName = self.getNodeName(path);
             parentDir.contents = parentDir.contents.filter(
               x => x.name !== nodeName
@@ -155,7 +169,7 @@ export default class Disk {
                           ? (() => {
                               const parentDir = this.getDir(
                                 this.getParentPath(newPath)
-                              );
+                              ) as DirNode;
                               parentDir.contents = parentDir.contents.filter(
                                 x => x.name !== newNodeName
                               );
@@ -170,7 +184,9 @@ export default class Disk {
                     : (() => {
                         //No such file or directory
                         //Check if parent exists.
-                        const parentDir = this.getDir(this.getParentPath(newPath));
+                        const parentDir = this.getDir(
+                          this.getParentPath(newPath)
+                        );
                         return parentDir
                           ? (() => {
                               parentDir.contents = parentDir.contents.concat({
@@ -179,10 +195,10 @@ export default class Disk {
                               });
                               deleteOriginal();
                             })()
-                          : exception(`The path ${_newPath} does not exist.`);
+                          : exception(`The path ${newPath} does not exist.`);
                       })();
               })()
-            : exception(`The path ${nodeName} does not exist.`);
+            : exception(`The path ${path} does not exist.`);
         })()
       : exception(`Cannot move to the same path ${path}.`);
   }
@@ -195,7 +211,7 @@ export default class Disk {
   /*
     Read a file.
   */
-  readFile(path) {
+  readFile(path: string) {
     return this.isValidFilePath(path)
       ? (() => {
           const node = this.getNode(path);
@@ -203,13 +219,13 @@ export default class Disk {
             ? node.contents
             : exception(`The path ${path} does not exist.`);
         })()
-      : exception(`Invalid filename ${_path}.`);
+      : exception(`Invalid filename ${path}.`);
   }
 
   /*
     Read a directory
   */
-  readDir(path) {
+  readDir(path: string) {
     const dir = this.getDir(path);
     return dir
       ? dir.contents.map(x => `${path}/${x.name}`)
@@ -219,9 +235,9 @@ export default class Disk {
   /*
     Read a directory recursively.
   */
-  readDirRecursive(path) {
+  readDirRecursive(path: string): string[] {
     const self = this;
-    function read(dir, path) {
+    function read(dir: DirNode, path: string): string[] {
       return dir.contents.reduce((acc, x) => {
         const childPath = `${path}/${x.name}`;
         const inner = self.isDir(x)
@@ -232,16 +248,18 @@ export default class Disk {
     }
 
     const dir = this.getDir(path);
-    return read(dir, path);
+    return dir
+      ? read(dir, path)
+      : exception(`The path ${path} does not exist.`);
   }
 
   /*
     Delete a directory or file. Similar to rm -f.
   */
-  remove(path) {
+  remove(path: string) {
     const parentPath = this.getParentPath(path);
     const nodeName = this.getNodeName(path);
-    const parent = this.getDir(parentPath);
+    const parent = this.getDir(parentPath) as DirNode;
     parent.contents = parent.contents.filter(x => x.name !== nodeName);
   }
 }
