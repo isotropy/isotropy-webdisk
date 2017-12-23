@@ -12,21 +12,23 @@ function cloneDirWithModification(
 function doCloneDirWithModification(
   tree: DirNode,
   path: string[],
-  fnModify: (n: DirNode) => DirNode
+  fnModify: (dir: DirNode) => DirNode
 ): DirNode {
-  return {
-    name: tree.name,
-    contents: tree.contents.map(
-      item =>
-        item.name !== path[0]
-          ? item
-          : isDir(item)
-            ? path.length > 1
-              ? doCloneDirWithModification(item, path.slice(1), fnModify)
-              : fnModify(item)
-            : exception(`The path ${"/" + path.join("/")} is not a directory.`)
-    )
-  };
+  return path.length === 0
+    ? fnModify(tree)
+    : {
+        name: tree.name,
+        contents: tree.contents.map(
+          item =>
+            item.name !== path[0]
+              ? item
+              : isDir(item)
+                ? doCloneDirWithModification(item, path.slice(1), fnModify)
+                : exception(
+                    `The path ${"/" + path.join("/")} is not a directory.`
+                  )
+        )
+      };
 }
 
 function isDir(obj: TreeNode | undefined): obj is DirNode {
@@ -74,16 +76,20 @@ export default class Disk {
   }
 
   private getNode(path: string): TreeNode | undefined {
-    const parts = path
-      .replace(/\/$/, "")
-      .split("/")
-      .slice(1);
+    const mustBeDir = path.endsWith("/");
+    const parts = path.split("/").slice(1);
 
-    return parts.reduce(
+    const result = parts.reduce(
       (acc: TreeNode | undefined, part) =>
         acc && isDir(acc) ? acc.contents.find(x => x.name === part) : undefined,
       this.fsTree
     );
+
+    return mustBeDir
+      ? isDir(result)
+        ? result
+        : exception(`The path ${path} exists but is not a directory.`)
+      : result;
   }
 
   private getDir(path: string): DirNode | never {
@@ -149,7 +155,23 @@ export default class Disk {
   /*
     Create a directory. Similar to mkdir.
   */
-  createDir(path: string, options = { ignoreIfExists: true, parents: true }) {
+  async createDir(
+    path: string,
+    options: { ignoreIfExists?: boolean; parents?: boolean } = {
+      ignoreIfExists: false,
+      parents: true
+    }
+  ) {
+    return this._createDir(path, {
+      ignoreIfExists: options.ignoreIfExists || false,
+      parents: options.parents || false
+    });
+  }
+
+  private _createDir(
+    path: string,
+    options: { ignoreIfExists: boolean; parents: boolean }
+  ) {
     const self = this;
     const pathToParent = getParentPath(path);
     const partsToParent = pathToParent.split("/").slice(1);
@@ -174,9 +196,11 @@ export default class Disk {
     const existing = parent.contents.find(x => x.name === newDirName);
 
     return existing
-      ? options.ignoreIfExists
-        ? undefined
-        : exception(`The path ${path} already exists.`)
+      ? isDir(existing)
+        ? options.ignoreIfExists
+          ? undefined
+          : exception(`The path ${path} already exists.`)
+        : exception(`The path ${path} is already a file.`)
       : (() => {
           this.fsTree = cloneDirWithModification(
             this.fsTree,
@@ -195,7 +219,15 @@ export default class Disk {
   /*
     Move a directory or file. Similar to mv.
   */
-  move(path: string, newPath: string, options = { overwrite: false }) {
+  async move(path: string, newPath: string, options = { overwrite: false }) {
+    return this._move(path, newPath, options);
+  }
+
+  private _move(
+    path: string,
+    newPath: string,
+    options: { overwrite: boolean }
+  ) {
     const self = this;
 
     return !newPath.startsWith(path)
@@ -221,7 +253,7 @@ export default class Disk {
                             contents: dir.contents.concat()
                           })
                         );
-                        self.remove(path);
+                        self._remove(path, { force: false });
                       })()
                   : newNode //new node is a file that exists
                     ? exception(`The path ${newPath} already exists.`)
@@ -251,7 +283,11 @@ export default class Disk {
   /*
     Read a file.
   */
-  readFile(path: string) {
+  async readFile(path: string) {
+    return this._readFile(path);
+  }
+
+  private _readFile(path: string) {
     return isValidFilePath(path)
       ? (() => {
           const node = this.getNode(path);
@@ -268,6 +304,9 @@ export default class Disk {
     Read a directory
   */
   readDir(path: string) {
+    return this._readDir(path);
+  }
+  private _readDir(path: string) {
     const dir = this.getDir(path);
     return dir
       ? dir.contents.map(x => `${path}/${x.name}`)
@@ -278,6 +317,10 @@ export default class Disk {
     Read a directory recursively.
   */
   readDirRecursive(path: string): string[] {
+    return this._readDirRecursive(path);
+  }
+
+  private _readDirRecursive(path: string): string[] {
     const self = this;
 
     function read(dir: DirNode, path: string): string[] {
@@ -302,7 +345,11 @@ export default class Disk {
   /*
     Delete a directory or file. Similar to rm -f.
   */
-  remove(path: string, options = { force: true }): void {
+  async remove(path: string, options = { force: true }) {
+    return this._remove(path, options);
+  }
+
+  private _remove(path: string, options: { force: boolean }): void {
     const node = this.getNode(path);
     return node
       ? (() => {

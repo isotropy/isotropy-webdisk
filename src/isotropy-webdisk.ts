@@ -16,15 +16,15 @@ const disks: { [key: string]: Disk } = {};
 
 export default class WebDisk {
   disk: Disk;
-  originalTree: DirNode;
+  originalTree: DirNode[];
 
-  constructor(tree: DirNode) {
+  constructor(tree: DirNode[]) {
     this.originalTree = tree;
     this.__reset();
   }
 
   __reset() {
-    this.disk = new Disk(this, this.originalTree);
+    this.disk = new Disk(this, { name: "", contents: this.originalTree });
   }
 
   async open() {
