@@ -14,15 +14,21 @@ export type TreeNode = FileNode | DirNode;
 
 const disks: { [key: string]: Disk } = {};
 
-export function init(diskName: string, data: DirNode) {
-  const disk = new Disk(data);
-  disks[diskName] = disk;
-}
+export default class WebDisk {
+  disk: Disk;
+  originalTree: DirNode;
 
-export async function open(diskName: string) {
-  return disks[diskName].open();
-}
+  constructor(tree: DirNode) {
+    this.originalTree = tree;
+    this.__reset();
+  }
 
-export function __data(diskName: string) {
-  return disks[diskName].fsTree;
+  __reset() {
+    this.disk = new Disk(this, this.originalTree);
+  }
+
+  async open() {
+    await this.disk.open();
+    return this.disk;
+  }
 }
