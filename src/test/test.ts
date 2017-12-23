@@ -1,16 +1,33 @@
-import should from "should";
-import * as babel from "babel-core";
-import sourceMapSupport from "source-map-support";
+require("should");
 import * as webdisk from "../isotropy-webdisk";
+import { DirNode, TreeNode } from "../isotropy-webdisk";
+import exception from "../exception";
 
-sourceMapSupport.install();
-
-function find(tree, path) {
+function find(tree: DirNode, path: string): TreeNode {
   const parts = path.split("/").slice(1);
-  return parts.reduce(
-    (acc, p) => (p === "" ? acc : acc.contents.find(x => x.name === p)),
+
+  const result = parts.reduce(
+    (acc: TreeNode | undefined, part) =>
+      acc && isDir(acc) ? acc.contents.find(x => x.name === part) : undefined,
     tree
   );
+
+  return result || exception(`The path ${path} does not exist.`);
+}
+
+function ensureDir(node: TreeNode | undefined): DirNode {
+  return isDir(node) ? node : exception(`Not a directory.`);
+}
+
+function isDir(node: TreeNode | undefined): node is DirNode {
+  return typeof node !== "undefined" && Array.isArray(node.contents);
+}
+
+function findDir(tree: DirNode, path: string): DirNode {
+  const node = find(tree, path);
+  return node && Array.isArray(node.contents)
+    ? (node as DirNode)
+    : exception(`Not a directory.`);
 }
 
 describe("Isotropy FS", () => {
@@ -74,7 +91,7 @@ describe("Isotropy FS", () => {
   it(`Creates or overwrites a file`, async () => {
     const path = "/docs/report.txt";
     const filename = "report.txt";
-    const dir = find(webdisk.__data("testdisk"), "/docs");
+    const dir = findDir(webdisk.__data("testdisk"), "/docs");
     dir.contents = dir.contents.concat({
       name: "report.txt",
       contents: "Pluto downgraded to a rock."
@@ -89,7 +106,7 @@ describe("Isotropy FS", () => {
   it(`Fails to overwrite existing file`, async () => {
     const path = "/docs/report.txt";
     const filename = "report.txt";
-    const dir = find(webdisk.__data("testdisk"), "/docs");
+    const dir = findDir(webdisk.__data("testdisk"), "/docs");
     dir.contents = dir.contents.concat({
       name: "report.txt",
       contents: "Pluto downgraded to a rock."
@@ -108,7 +125,7 @@ describe("Isotropy FS", () => {
   it(`Reads a file`, async () => {
     const path = "/docs/report.txt";
     const filename = "report.txt";
-    const dir = find(webdisk.__data("testdisk"), "/docs");
+    const dir = findDir(webdisk.__data("testdisk"), "/docs");
     dir.contents = dir.contents.concat({
       name: "report.txt",
       contents: "Pluto downgraded to a rock."
@@ -178,7 +195,7 @@ describe("Isotropy FS", () => {
     const path = "/pics/secret";
     const disk = await webdisk.open("testdisk");
     await disk.createDir(path);
-    const dir = find(webdisk.__data("testdisk"), "/pics/secret");
+    const dir = findDir(webdisk.__data("testdisk"), "/pics/secret");
     dir.name.should.equal("secret");
     dir.contents.should.be.an.instanceOf(Array);
   });
@@ -188,7 +205,7 @@ describe("Isotropy FS", () => {
     const path = "/pics";
     const disk = await webdisk.open("testdisk");
     await disk.remove(path);
-    const dir = find(webdisk.__data("testdisk"), "/");
+    const dir = findDir(webdisk.__data("testdisk"), "/");
     dir.contents.length.should.equal(1);
   });
 
@@ -200,7 +217,10 @@ describe("Isotropy FS", () => {
     await disk.move(path, newPath);
     const loopDir = find(webdisk.__data("testdisk"), "/");
     loopDir.contents.length.should.equal(3);
-    const largePicsDir = find(webdisk.__data("testdisk"), "/pics/large-pics");
+    const largePicsDir = findDir(
+      webdisk.__data("testdisk"),
+      "/pics/large-pics"
+    );
     largePicsDir.contents.length.should.equal(2);
   });
 
@@ -209,9 +229,12 @@ describe("Isotropy FS", () => {
     const newPath = "/pics/large-pics/storage";
     const disk = await webdisk.open("testdisk");
     await disk.move(path, newPath);
-    const largePicsDir = find(webdisk.__data("testdisk"), "/pics/large-pics");
+    const largePicsDir = findDir(
+      webdisk.__data("testdisk"),
+      "/pics/large-pics"
+    );
     should.not.exist(largePicsDir.contents.find(x => x.name === "backup"));
-    largePicsDir.contents.find(x => x.name === "storage").should.not.be.empty();
+    should.exist(largePicsDir.contents.find(x => x.name === "storage"));
   });
 
   it(`Fails to move a directory into an existing file path`, async () => {

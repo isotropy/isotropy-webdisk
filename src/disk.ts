@@ -1,6 +1,5 @@
 import exception from "./exception";
 import { FileNode, DirNode, TreeNode } from "./isotropy-webdisk";
-import { EISDIR } from "constants";
 
 export default class Disk {
   fsTree: DirNode;
@@ -30,7 +29,7 @@ export default class Disk {
     const node = this.getNode(path);
     return node && this.isDir(node)
       ? node
-      : exception(`The path ${path} was not found.`);
+      : exception(`The path ${path} does not exist.`);
   }
 
   isValidFilePath(path: string) {
@@ -103,7 +102,7 @@ export default class Disk {
       : (() => {
           const partsToParent = pathToParent.split("/").slice(1);
           return partsToParent.reduce(
-            (acc: TreeNode, item: string): TreeNode =>
+            (acc: DirNode, item: string): DirNode =>
               self.isDir(acc)
                 ? acc.contents.find(x => x.name === item)
                   ? this.isDir(acc)
@@ -144,7 +143,7 @@ export default class Disk {
           const source = this.getNode(path);
 
           function deleteOriginal() {
-            const parentDir = self.getDir(self.getParentPath(path)) as DirNode;
+            const parentDir = self.getDir(self.getParentPath(path));
             const nodeName = self.getNodeName(path);
             parentDir.contents = parentDir.contents.filter(
               x => x.name !== nodeName
@@ -169,7 +168,7 @@ export default class Disk {
                           ? (() => {
                               const parentDir = this.getDir(
                                 this.getParentPath(newPath)
-                              ) as DirNode;
+                              );
                               parentDir.contents = parentDir.contents.filter(
                                 x => x.name !== newNodeName
                               );
@@ -238,13 +237,16 @@ export default class Disk {
   readDirRecursive(path: string): string[] {
     const self = this;
     function read(dir: DirNode, path: string): string[] {
-      return dir.contents.reduce((acc, x) => {
-        const childPath = `${path}/${x.name}`;
-        const inner = self.isDir(x)
-          ? [childPath].concat(read(x, childPath))
-          : [childPath];
-        return acc.concat(inner);
-      }, []);
+      return dir.contents.reduce(
+        (acc, x) => {
+          const childPath = `${path}/${x.name}`;
+          const inner = self.isDir(x)
+            ? [childPath].concat(read(x, childPath))
+            : [childPath];
+          return acc.concat(inner);
+        },
+        [] as string[]
+      );
     }
 
     const dir = this.getDir(path);
@@ -259,7 +261,7 @@ export default class Disk {
   remove(path: string) {
     const parentPath = this.getParentPath(path);
     const nodeName = this.getNodeName(path);
-    const parent = this.getDir(parentPath) as DirNode;
+    const parent = this.getDir(parentPath);
     parent.contents = parent.contents.filter(x => x.name !== nodeName);
   }
 }

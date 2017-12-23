@@ -14,7 +14,7 @@ export type TreeNode = FileNode | DirNode;
 
 const disks: { [key: string]: Disk } = {};
 
-export function init(diskName: string, data: TreeNode) {
+export function init(diskName: string, data: DirNode) {
   const disk = new Disk(data);
   disks[diskName] = disk;
 }
