@@ -74,14 +74,14 @@ describe("Isotropy FS", () => {
   //   ex.message.should.equal("The path /docs/report.txt already exists.");
   // });
 
-  /* readFile */
-  it(`Reads a file`, async () => {
-    const path = "/docs/report.txt";
-    const filename = "report.txt";
-    const disk = await webdisk.open();
-    const contents = await disk.readFile(path);
-    contents.should.equal("Pluto downgraded to a rock.");
-  });
+  // /* readFile */
+  // it(`Reads a file`, async () => {
+  //   const path = "/docs/report.txt";
+  //   const filename = "report.txt";
+  //   const disk = await webdisk.open();
+  //   const contents = await disk.readFile(path);
+  //   contents.should.equal("Pluto downgraded to a rock.");
+  // });
 
   // /* readFile */
   // it(`Fails to read a missing file`, async () => {
@@ -90,7 +90,6 @@ describe("Isotropy FS", () => {
   //   try {
   //     const disk = await webdisk.open();
   //     const contents = await disk.readFile(path);
-  //     debugger;
   //   } catch (_ex) {
   //     ex = _ex;
   //   }
@@ -218,18 +217,18 @@ describe("Isotropy FS", () => {
   //   largePicsDir.contents.length.should.equal(2);
   // });
 
-  // it(`Renames a file or directory`, async () => {
-  //   const path = "/pics/large-pics/backup";
-  //   const newPath = "/pics/large-pics/storage";
-  //   const disk = await webdisk.open();
-  //   await disk.move(path, newPath);
-  //   const largePicsDir = findDir(
-  //     disk.__data(),
-  //     "/pics/large-pics"
-  //   );
-  //   should.not.exist(largePicsDir.contents.find(x => x.name === "backup"));
-  //   should.exist(largePicsDir.contents.find(x => x.name === "storage"));
-  // });
+  it(`Renames a file or directory`, async () => {
+    const path = "/pics/large-pics/backup";
+    const newPath = "/pics/large-pics/storage";
+    const disk = await webdisk.open();
+    await disk.move(path, newPath);
+    const largePicsDir = findDir(
+      disk.__data(),
+      "/pics/large-pics"
+    );
+    should.not.exist(largePicsDir.contents.find(x => x.name === "backup"));
+    should.exist(largePicsDir.contents.find(x => x.name === "storage"));
+  });
 
   // it(`Fails to move a directory into an existing file path`, async () => {
   //   const path = "/pics/large-pics/backup";

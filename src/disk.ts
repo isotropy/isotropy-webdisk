@@ -1,12 +1,19 @@
 import exception from "./exception";
 import WebDisk, { FileNode, DirNode, TreeNode } from "./isotropy-webdisk";
+import { debuglog } from "util";
+import { EISDIR } from "constants";
+
+function toParts(path: string) {
+  const parts = path.split("/");
+  return parts.slice(0, path.endsWith("/") ? parts.length - 1 : parts.length);
+}
 
 function cloneDirWithModification(
   tree: DirNode,
   path: string,
   fnModify: (n: DirNode) => DirNode
 ): DirNode {
-  return doCloneDirWithModification(tree, path.split("/").slice(1), fnModify);
+  return doCloneDirWithModification(tree, toParts(path), fnModify);
 }
 
 function doCloneDirWithModification(
@@ -14,13 +21,13 @@ function doCloneDirWithModification(
   path: string[],
   fnModify: (dir: DirNode) => DirNode
 ): DirNode {
-  return path.length === 0
+  return path.length === 1
     ? fnModify(tree)
     : {
         name: tree.name,
         contents: tree.contents.map(
           item =>
-            item.name !== path[0]
+            item.name !== path[1]
               ? item
               : isDir(item)
                 ? doCloneDirWithModification(item, path.slice(1), fnModify)
@@ -31,16 +38,12 @@ function doCloneDirWithModification(
       };
 }
 
-function isDir(obj: TreeNode | undefined): obj is DirNode {
-  return typeof obj !== "undefined" && Array.isArray(obj.contents);
-}
-
-function ensureDir(obj: any): DirNode | never {
-  return isDir(obj) ? obj : exception(`The node is not a directory.`);
+function isDir(obj: TreeNode): obj is DirNode {
+  return Array.isArray(obj.contents);
 }
 
 function getNodeName(path: string) {
-  return path.split("/").slice(path.endsWith("/") ? -2 : -1)[0];
+  return toParts(path).slice(-1)[0];
 }
 
 function isValidFilePath(path: string) {
@@ -48,9 +51,8 @@ function isValidFilePath(path: string) {
 }
 
 function getParentPath(path: string) {
-  return path
-    .split("/")
-    .slice(0, path.endsWith("/") ? -2 : -1)
+  return toParts(path)
+    .slice(0, -1)
     .join("/");
 }
 
@@ -76,23 +78,35 @@ export default class Disk {
   }
 
   private getNode(path: string): TreeNode | undefined {
-    const mustBeDir = path.endsWith("/");
-    const parts = path.split("/").slice(1);
+    return path === "/"
+      ? this.fsTree
+      : (() => {
+          const mustBeDir = path.endsWith("/");
+          const parts = toParts(path);
 
-    const result = parts.reduce(
-      (acc: TreeNode | undefined, part) =>
-        acc && isDir(acc) ? acc.contents.find(x => x.name === part) : undefined,
-      this.fsTree
-    );
+          function loop(
+            tree: TreeNode | undefined,
+            parts: string[]
+          ): TreeNode | undefined {
+            return tree
+              ? parts.length > 0
+                ? isDir(tree)
+                  ? loop(
+                      tree.contents.find(x => x.name === parts[0]),
+                      parts.slice(1)
+                    )
+                  : exception(`The path ${path} is invalid.`)
+                : !mustBeDir || isDir(tree)
+                  ? tree
+                  : exception(`The path ${path} exists but is not a directory.`)
+              : undefined;
+          }
 
-    return mustBeDir
-      ? isDir(result)
-        ? result
-        : exception(`The path ${path} exists but is not a directory.`)
-      : result;
+          return loop(this.fsTree, parts.slice(1));
+        })();
   }
 
-  private getDir(path: string): DirNode | never {
+  private getDir(path: string): DirNode {
     const node = this.getNode(path);
     return node
       ? isDir(node) ? node : exception(`The path ${path} is not a directory.`)
@@ -162,7 +176,7 @@ export default class Disk {
       parents: true
     }
   ) {
-    return this._createDir(path, {
+    this._createDir(path, {
       ignoreIfExists: options.ignoreIfExists || false,
       parents: options.parents || false
     });
@@ -171,48 +185,47 @@ export default class Disk {
   private _createDir(
     path: string,
     options: { ignoreIfExists: boolean; parents: boolean }
-  ) {
+  ): DirNode {
     const self = this;
     const pathToParent = getParentPath(path);
-    const partsToParent = pathToParent.split("/").slice(1);
+    const partsToParent = toParts(pathToParent);
     const newDirName = getNodeName(path);
 
-    const parent = !options.parents
-      ? this.getDir(pathToParent)
-      : (() => {
-          partsToParent.reduce(
-            (acc, part) => (
-              self.createDir(
-                "/" + acc.concat(part).join("/"),
-                (options = { ignoreIfExists: true, parents: false })
-              ),
-              acc.concat(part)
-            ),
-            [] as string[]
-          );
-          return this.getDir(pathToParent);
-        })();
+    const parentOrEmpty = this.getNode(pathToParent);
 
-    const existing = parent.contents.find(x => x.name === newDirName);
+    //If parent does not exist, we have to create it.
+    const parent =
+      parentOrEmpty && isDir(parentOrEmpty)
+        ? parentOrEmpty
+        : options.parents
+          ? this._createDir(pathToParent, {
+              ignoreIfExists: false,
+              parents: true
+            })
+          : exception(`Invalid path ${path}.`);
 
-    return existing
-      ? isDir(existing)
-        ? options.ignoreIfExists
-          ? undefined
-          : exception(`The path ${path} already exists.`)
-        : exception(`The path ${path} is already a file.`)
-      : (() => {
-          this.fsTree = cloneDirWithModification(
-            this.fsTree,
+    //See if the target path already exists.
+    const existingItem = parent.contents.find(x => x.name === newDirName);
+    return existingItem
+      ? !isDir(existingItem)
+        ? exception(`The path ${path} is already a file.`)
+        : !options.ignoreIfExists
+          ? exception(`The path ${path} already exists.`)
+          : existingItem
+      : //Does not exist. Add a new directory.
+        (() => {
+          self.fsTree = cloneDirWithModification(
+            self.fsTree,
             pathToParent,
             dir => ({
-              name: parent.name,
-              contents: parent.contents.concat({
+              name: dir.name,
+              contents: dir.contents.concat({
                 name: newDirName,
                 contents: []
               })
             })
           );
+          return this.getNode(path) as DirNode;
         })();
   }
 
@@ -224,60 +237,53 @@ export default class Disk {
   }
 
   private _move(
-    path: string,
-    newPath: string,
+    sourcePath: string,
+    destPath: string,
     options: { overwrite: boolean }
   ) {
     const self = this;
 
-    return !newPath.startsWith(path)
-      ? (() => {
-          const source = this.getNode(path);
+    const source = this.getNode(sourcePath);
+    return source
+      ? isDir(source)
+        ? this._moveDir(source,sourcePath, destPath, options)
+        : this._moveFile(source,sourcePath, destPath, options)
+      : exception(`The path ${sourcePath} does not exist.`);
+  }
 
-          return source
-            ? (() => {
-                const newNode = this.getNode(newPath);
-                return newNode && isDir(newNode) //new node is a directory
-                  ? newNode.contents.some(x => x.name === getNodeName(path))
-                    ? exception(
-                        `The path ${newPath}${getNodeName(
-                          path
-                        )} already exists.`
-                      )
-                    : (() => {
-                        self.fsTree = cloneDirWithModification(
-                          self.fsTree,
-                          getParentPath(newPath),
-                          dir => ({
-                            name: dir.name,
-                            contents: dir.contents.concat()
-                          })
-                        );
-                        self._remove(path, { force: false });
-                      })()
-                  : newNode //new node is a file that exists
-                    ? exception(`The path ${newPath} already exists.`)
-                    : (() => {
-                        //Let's see if parentNode exists.
-                        const parentPath = getParentPath(newPath);
-                        const parentDir = this.getDir(parentPath);
-                        return parentDir
-                          ? (() => {
-                              self.fsTree = cloneDirWithModification(
-                                self.fsTree,
-                                parentPath,
-                                dir => ({
-                                  name: dir.name,
-                                  contents: dir.contents.concat(source)
-                                })
-                              );
-                            })()
-                          : exception(`The path ${parentPath} does not exist.`);
-                      })();
-              })()
-            : exception(`The path ${path} does not exist.`);
-        })()
-      : exception(`Cannot move to the same path ${path}.`);
+  private _moveDir(source: DirNode, sourceDirPath: string, destPath: string, options: { overwrite: boolean }) {
+    const self = this;
+
+    const maybeDest = this.getNode(destPath);
+    return maybeDest
+      ? this._moveDirIntoDir(source, sourceDirPath, maybeDest, destPath)
+      : this._moveDirToNewPath(source, sourceDirPath, destPath)
+  }
+
+  private _moveDirIntoDir(source: DirNode, sourcePath: string, dest: TreeNode, destPath: string) {
+    const self = this;
+    return isDir(dest)
+      ? (() => {
+        self.fsTree = cloneDirWithModification(self.fsTree, destPath, dir => ({
+          name: dir.name,
+          contents: dir.contents.concat({
+            name: source.name,
+            contents: source.contents
+          })
+        }))
+        self._remove(sourcePath, { force: false });
+      })()
+      : exception(`Cannot move ${sourcePath} into file ${destPath}.`)
+  }
+
+  private _moveDirToNewPath(source: DirNode, sourcePath: string, destPath: string) {
+    const parent = getParentPath(destPath);
+    const dir = this.getNode(parent);
+    return 
+  }
+
+  private _moveFile(source: FileNode, sourceFilePath: string, destPath: string, options: { overwrite: boolean }) {
+
   }
 
   /*
