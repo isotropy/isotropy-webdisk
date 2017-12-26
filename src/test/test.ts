@@ -204,18 +204,63 @@ describe("Isotropy FS", () => {
     dir.contents.length.should.equal(1);
   });
 
-  it(`Renames a file or directory`, async () => {
-    const path = "/pics/large-pics/backup";
-    const newPath = "/pics/large-pics/storage";
+  it(`Moves a file`, async () => {
+    const path = "/pics/asterix.jpg";
+    const newPath = "/docs";
     const disk = await webdisk.open();
-    await disk.moveDir(path, newPath);
-    const largePicsDir = findDir(disk.__data(), "/pics/large-pics");
-    should.not.exist(largePicsDir.contents.find(x => x.name === "backup"));
-    should.exist(largePicsDir.contents.find(x => x.name === "storage"));
+    await disk.moveFile(path, newPath);
+    const pics = findDir(disk.__data(), "/pics");
+    const docs = findDir(disk.__data(), "/docs");
+    should.not.exist(pics.contents.find(x => x.name === "asterix.jpg"));
+    should.exist(docs.contents.find(x => x.name === "asterix.jpg"));
   });
 
   /* move */
-  it(`Moves a file or directory to parent`, async () => {
+  it(`Moves a file to parent`, async () => {
+    const path = "/pics/large-pics/asterix-large.jpg";
+    const newPath = "/pics";
+    const disk = await webdisk.open();
+    await disk.moveFile(path, newPath);
+    const pics = findDir(disk.__data(), "/pics");
+    const largePics = findDir(disk.__data(), "/pics/large-pics");
+    should.not.exist(largePics.contents.find(x => x.name === "asterix-large.jpg"));
+    should.exist(pics.contents.find(x => x.name === "asterix-large.jpg"));
+  });
+
+  it(`Renames a file`, async () => {
+    const path = "/pics/asterix.jpg";
+    const newPath = "/pics/asterix-original.jpg";
+    const disk = await webdisk.open();
+    await disk.moveFile(path, newPath);
+    const pics = findDir(disk.__data(), "/pics");
+    should.not.exist(pics.contents.find(x => x.name === "asterix.jpg"));
+    should.exist(pics.contents.find(x => x.name === "asterix-original.jpg"));
+  });
+
+  it(`Moves a directory`, async () => {
+    const path = "/pics/large-pics/backup";
+    const newPath = "/docs";
+    const disk = await webdisk.open();
+    await disk.moveDir(path, newPath);
+    const largePicsDir = findDir(disk.__data(), "/pics/large-pics");
+    const docs = findDir(disk.__data(), "/docs");
+    should.not.exist(largePicsDir.contents.find(x => x.name === "backup"));
+    should.exist(docs.contents.find(x => x.name === "backup"));
+  });
+
+  it(`Moves a directory to separate branch and renames`, async () => {
+    const path = "/pics/large-pics/backup";
+    const newPath = "/docs/storage";
+    const disk = await webdisk.open();
+    await disk.moveDir(path, newPath);
+    const largePicsDir = findDir(disk.__data(), "/pics/large-pics");
+    const docs = findDir(disk.__data(), "/docs");
+    should.not.exist(largePicsDir.contents.find(x => x.name === "backup"));
+    should.exist(docs.contents.find(x => x.name === "storage"));
+  });
+
+  /* move */
+  it(`Moves a directory to parent`, async () => {
     const path = "/pics/large-pics/backup";
     const newPath = "/";
     const disk = await webdisk.open();
@@ -224,6 +269,16 @@ describe("Isotropy FS", () => {
     loopDir.contents.length.should.equal(3);
     const largePicsDir = findDir(disk.__data(), "/pics/large-pics");
     largePicsDir.contents.length.should.equal(2);
+  });
+
+  it(`Renames a directory`, async () => {
+    const path = "/pics/large-pics/backup";
+    const newPath = "/pics/large-pics/storage";
+    const disk = await webdisk.open();
+    await disk.moveDir(path, newPath);
+    const largePicsDir = findDir(disk.__data(), "/pics/large-pics");
+    should.not.exist(largePicsDir.contents.find(x => x.name === "backup"));
+    should.exist(largePicsDir.contents.find(x => x.name === "storage"));
   });
 
   it(`Fails to move a directory into an existing file path`, async () => {
@@ -251,4 +306,28 @@ describe("Isotropy FS", () => {
     }
     ex.message.should.equal("Cannot copy path /pics into itself.");
   });
+
+    /* copy */
+    it(`Copies a file`, async () => {
+      const path = "/pics/asterix.jpg";
+      const newPath = "/docs/asterix.jpg";
+      const disk = await webdisk.open();
+      await disk.copyFile(path, newPath);
+      const pics = findDir(disk.__data(), "/pics");
+      const docs = findDir(disk.__data(), "/docs");
+      pics.contents.length.should.equal(3);
+      docs.contents.length.should.equal(3);
+    });
+
+    /* copy */
+    it(`Copies a directory`, async () => {
+      const path = "/pics/large-pics";
+      const newPath = "/docs/";
+      const disk = await webdisk.open();
+      await disk.copyDir(path, newPath);
+      const pics = findDir(disk.__data(), "/pics");
+      const docs = findDir(disk.__data(), "/docs");
+      pics.contents.length.should.equal(3);
+      docs.contents.length.should.equal(3);
+    });
 });

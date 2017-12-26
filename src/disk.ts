@@ -129,73 +129,26 @@ export default class Disk {
     this.state = "OPEN";
   }
 
-  /*
-    Copy a file
-  */
-  private _copyFile(
+  async copyFile(
     sourcePath: string,
     destPath: string,
-    options: { force: false }
+    options = { force: false }
   ) {
-    const self = this;
+    return this._moveFile(sourcePath, destPath, {
+      ...options,
+      deleteOriginal: false
+    });
+  }
 
-    function copyToDir(
-      source: FileNode,
-      sourcePath: string,
-      newName: string,
-      destDirPath: string
-    ) {
-      const file: FileNode = {
-        ...source,
-        name: newName
-      };
-
-      self.fsTree = cloneDirWithModification(self.fsTree, destDirPath, dir => ({
-        name: dir.name,
-        contents: dir.contents.concat(file)
-      }));
-
-      self._remove(sourcePath);
-    }
-
-    const source = this.getNode(sourcePath);
-    return source
-      ? isFile(source)
-        ? () => {
-            const dest = this.getNode(destPath);
-            return dest
-              ? //If dest is a directory we copy into it
-                isDir(dest)
-                ? copyToDir(source, sourcePath, source.name, destPath)
-                : //If dest is not a directory, copy if force option is set
-                  options.force
-                  ? copyToDir(
-                      source,
-                      sourcePath,
-                      getNodeName(destPath),
-                      getParentPath(destPath)
-                    )
-                  : exception(`The path ${destPath} already exists.`)
-              : //dest does not exist
-                () => {
-                  const parentPath = getParentPath(destPath);
-                  const parent = this.getNode(parentPath);
-
-                  //See if parent exists
-                  return parent
-                    ? copyToDir(
-                        source,
-                        sourcePath,
-                        getNodeName(destPath),
-                        parentPath
-                      )
-                    : exception(`The path ${parentPath} does not exist.`);
-                };
-          }
-        : exception(
-            `The path ${sourcePath} is a directory. Use copyDir() instead.`
-          )
-      : exception(`The path ${sourcePath} does not exist.`);
+  async copyDir(
+    sourcePath: string,
+    destPath: string,
+    options = { force: false }
+  ) {
+    return this._moveDir(sourcePath, destPath, {
+      ...options,
+      deleteOriginal: false
+    });
   }
 
   /*
@@ -307,13 +260,16 @@ export default class Disk {
     destPath: string,
     options = { force: false }
   ) {
-    return this._moveFile(sourcePath, destPath, options);
+    return this._moveFile(sourcePath, destPath, {
+      ...options,
+      deleteOriginal: true
+    });
   }
 
   private _moveFile(
     sourcePath: string,
     destPath: string,
-    options: { force: boolean }
+    options: { force: boolean; deleteOriginal: boolean }
   ) {
     const self = this;
     const source = this.getNode(sourcePath);
@@ -327,15 +283,16 @@ export default class Disk {
                     source,
                     sourcePath,
                     source.name,
-                    destPath
+                    destPath,
+                    options.deleteOriginal
                   )
                 : options.force
                   ? (() => {
                       self._remove(destPath);
-                      self.moveToDestParent(source, sourcePath, destPath);
+                      self.moveToDestParent(source, sourcePath, destPath, options.deleteOriginal);
                     })()
                   : exception(`The path ${destPath} already exists.`)
-              : self.moveToDestParent(source, sourcePath, destPath);
+              : self.moveToDestParent(source, sourcePath, destPath, options.deleteOriginal);
           })()
         : exception(`The path ${sourcePath} is a directory.`)
       : exception(`The path ${sourcePath} does not exist.`);
@@ -346,13 +303,16 @@ export default class Disk {
     destPath: string,
     options = { force: false }
   ) {
-    return this._moveDir(sourcePath, destPath, options);
+    return this._moveDir(sourcePath, destPath, {
+      ...options,
+      deleteOriginal: true
+    });
   }
 
   private _moveDir(
     sourcePath: string,
     destPath: string,
-    options: { force: boolean }
+    options: { force: boolean; deleteOriginal: boolean }
   ) {
     const self = this;
     const source = this.getNode(sourcePath);
@@ -367,15 +327,26 @@ export default class Disk {
                       source,
                       sourcePath,
                       source.name,
-                      destPath
+                      destPath,
+                      options.deleteOriginal
                     )
                   : options.force
                     ? (() => {
                         self._remove(destPath);
-                        self.moveToDestParent(source, sourcePath, destPath);
+                        self.moveToDestParent(
+                          source,
+                          sourcePath,
+                          destPath,
+                          options.deleteOriginal
+                        );
                       })()
                     : exception(`The path ${destPath} already exists.`)
-                : self.moveToDestParent(source, sourcePath, destPath);
+                : self.moveToDestParent(
+                    source,
+                    sourcePath,
+                    destPath,
+                    options.deleteOriginal
+                  );
             })()
           : exception(`The path ${sourcePath} is a file.`)
         : exception(`Cannot copy path ${sourcePath} into itself.`)
@@ -386,7 +357,8 @@ export default class Disk {
     source: TreeNode,
     sourcePath: string,
     newName: string,
-    destDirPath: string
+    destDirPath: string,
+    deleteOriginal: boolean
   ) {
     const treeNode: TreeNode = {
       ...source,
@@ -396,14 +368,16 @@ export default class Disk {
       name: dir.name,
       contents: dir.contents.concat(treeNode)
     }));
+
     //Delete source
-    this._remove(sourcePath);
+    if (deleteOriginal) this._remove(sourcePath);
   }
 
   private moveToDestParent(
     source: TreeNode,
     sourcePath: string,
-    destPath: string
+    destPath: string,
+    deleteOriginal: boolean
   ) {
     const destParentPath = getParentPath(destPath);
     const destParent = this.getNode(destParentPath);
@@ -412,7 +386,8 @@ export default class Disk {
           source,
           sourcePath,
           getNodeName(destPath),
-          getParentPath(destPath)
+          getParentPath(destPath),
+          deleteOriginal
         )
       : exception(`The path ${destParentPath} does not exist.`);
   }
