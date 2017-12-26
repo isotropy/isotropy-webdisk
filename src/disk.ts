@@ -16,6 +16,12 @@ function cloneDirWithModification(
   return doCloneDirWithModification(tree, toParts(path), fnModify);
 }
 
+function isChild(maybeParent: string, node: string) {
+  return node.startsWith(
+    /\/$/.test(maybeParent) ? maybeParent : maybeParent + "/"
+  );
+}
+
 function doCloneDirWithModification(
   tree: DirNode,
   path: string[],
@@ -243,47 +249,60 @@ export default class Disk {
   ) {
     const self = this;
 
-    const source = this.getNode(sourcePath);
-    return source
-      ? isDir(source)
-        ? this._moveDir(source,sourcePath, destPath, options)
-        : this._moveFile(source,sourcePath, destPath, options)
-      : exception(`The path ${sourcePath} does not exist.`);
-  }
+    function _moveDir(
+      source: DirNode,
+      dest: TreeNode | undefined,
+      options: { overwrite: boolean }
+    ) {
+      //If dest exists, it needs to be a directory.
+      return dest
+        ? isDir(dest)
+          ? moveToDestination(source, source.name, destPath)
+          : exception(`Cannot move ${sourcePath} into file ${destPath}.`)
+        : moveToDestination(source, getNodeName(destPath), getParentPath(destPath));
+    }
 
-  private _moveDir(source: DirNode, sourceDirPath: string, destPath: string, options: { overwrite: boolean }) {
-    const self = this;
+    function _moveFile(
+      source: FileNode,
+      dest: TreeNode | undefined,
+      options: { overwrite: boolean }
+    ) {
+      //If dest exists, it needs to be a directory.
+      return dest
+        ? isDir(dest)
+          ? moveToDestination(source, sourcePath, destPath)
+          : exception(`The path ${destPath} already exists.`)
+        : moveToDestination(source, getNodeName(destPath), getParentPath(destPath));
+    }
 
-    const maybeDest = this.getNode(destPath);
-    return maybeDest
-      ? this._moveDirIntoDir(source, sourceDirPath, maybeDest, destPath)
-      : this._moveDirToNewPath(source, sourceDirPath, destPath)
-  }
+    function moveToDestination(source: TreeNode, sourceName: string, destPath: string) {
+      const treeNode: TreeNode = {
+        name: sourceName,
+        ...source
+      }
+      self.fsTree = cloneDirWithModification(self.fsTree, destPath, dir => ({
+        name: dir.name,
+        contents: dir.contents.concat(treeNode)
+      }));
+      //Delete source
+      self._remove(sourcePath, { force: false });
+    }
 
-  private _moveDirIntoDir(source: DirNode, sourcePath: string, dest: TreeNode, destPath: string) {
-    const self = this;
-    return isDir(dest)
+    return !isChild(sourcePath, destPath)
       ? (() => {
-        self.fsTree = cloneDirWithModification(self.fsTree, destPath, dir => ({
-          name: dir.name,
-          contents: dir.contents.concat({
-            name: source.name,
-            contents: source.contents
-          })
-        }))
-        self._remove(sourcePath, { force: false });
-      })()
-      : exception(`Cannot move ${sourcePath} into file ${destPath}.`)
-  }
+          const self = this;
 
-  private _moveDirToNewPath(source: DirNode, sourcePath: string, destPath: string) {
-    const parent = getParentPath(destPath);
-    const dir = this.getNode(parent);
-    return 
-  }
-
-  private _moveFile(source: FileNode, sourceFilePath: string, destPath: string, options: { overwrite: boolean }) {
-
+          const source = this.getNode(sourcePath);
+          return source
+            ? (() => {
+                const dest = self.getNode(destPath);
+                return isDir(source)
+                  ? _moveDir(source, dest, options)
+                  : _moveFile(source, dest, options);
+              })()
+            : exception(`The path ${sourcePath} does not exist.`);
+        })()
+      : exception(`Cannot copy path ${sourcePath} into itself.`);
   }
 
   /*
