@@ -46,6 +46,10 @@ function isDir(obj: TreeNode): obj is DirNode {
   return Array.isArray(obj.contents);
 }
 
+function isFile(obj: TreeNode): obj is FileNode {
+  return !isDir(obj);
+}
+
 function getNodeName(path: string) {
   return toParts(path).slice(-1)[0];
 }
@@ -151,12 +155,12 @@ export default class Disk {
         contents: dir.contents.concat(file)
       }));
 
-      self._remove(sourcePath, { force: false });
+      self._remove(sourcePath);
     }
 
     const source = this.getNode(sourcePath);
     return source
-      ? !isDir(source)
+      ? isFile(source)
         ? () => {
             const dest = this.getNode(destPath);
             return dest
@@ -276,7 +280,7 @@ export default class Disk {
     //See if the target path already exists.
     const existingItem = parent.contents.find(x => x.name === newDirName);
     return existingItem
-      ? !isDir(existingItem)
+      ? isFile(existingItem)
         ? exception(`The path ${path} is already a file.`)
         : !options.ignoreIfExists
           ? exception(`The path ${path} already exists.`)
@@ -298,82 +302,119 @@ export default class Disk {
         })();
   }
 
-  /*
-    Move a directory or file. Similar to mv.
-  */
-  async move(path: string, newPath: string, options = { force: false }) {
-    return this._move(path, newPath, options);
+  async moveFile(
+    sourcePath: string,
+    destPath: string,
+    options = { force: false }
+  ) {
+    return this._moveFile(sourcePath, destPath, options);
   }
 
-  private _move(
+  private _moveFile(
     sourcePath: string,
     destPath: string,
     options: { force: boolean }
   ) {
     const self = this;
+    const source = this.getNode(sourcePath);
+    return source
+      ? isFile(source)
+        ? (() => {
+            const dest = self.getNode(destPath);
+            return dest
+              ? isDir(dest)
+                ? this.moveAndDeleteOriginal(
+                    source,
+                    sourcePath,
+                    source.name,
+                    destPath
+                  )
+                : options.force
+                  ? (() => {
+                      self._remove(destPath);
+                      self.moveToDestParent(source, sourcePath, destPath);
+                    })()
+                  : exception(`The path ${destPath} already exists.`)
+              : self.moveToDestParent(source, sourcePath, destPath);
+          })()
+        : exception(`The path ${sourcePath} is a directory.`)
+      : exception(`The path ${sourcePath} does not exist.`);
+  }
 
-    function moveAndDeleteOriginal(
-      source: TreeNode,
-      sourcePath: string,
-      newName: string,
-      destDirPath: string
-    ) {
-      const treeNode: TreeNode = {
-        ...source,
-        name: newName
-      };
-      self.fsTree = cloneDirWithModification(self.fsTree, destDirPath, dir => ({
-        name: dir.name,
-        contents: dir.contents.concat(treeNode)
-      }));
-      //Delete source
-      self._remove(sourcePath, { force: false });
-    }
+  async moveDir(
+    sourcePath: string,
+    destPath: string,
+    options = { force: false }
+  ) {
+    return this._moveDir(sourcePath, destPath, options);
+  }
 
-    function moveToDestParent(
-      source: TreeNode,
-      sourcePath: string,
-      destPath: string
-    ) {
-      const destParentPath = getParentPath(destPath);
-      const destParent = self.getNode(destParentPath);
-      return destParent
-        ? moveAndDeleteOriginal(
-            source,
-            sourcePath,
-            getNodeName(destPath),
-            getParentPath(destPath)
-          )
-        : exception(`Thep path ${destParentPath} does not exist.`);
-    }
+  private _moveDir(
+    sourcePath: string,
+    destPath: string,
+    options: { force: boolean }
+  ) {
+    const self = this;
+    const source = this.getNode(sourcePath);
+    return source
+      ? !isChild(sourcePath, destPath)
+        ? isDir(source)
+          ? (() => {
+              const dest = self.getNode(destPath);
+              return dest
+                ? isDir(dest)
+                  ? this.moveAndDeleteOriginal(
+                      source,
+                      sourcePath,
+                      source.name,
+                      destPath
+                    )
+                  : options.force
+                    ? (() => {
+                        self._remove(destPath);
+                        self.moveToDestParent(source, sourcePath, destPath);
+                      })()
+                    : exception(`The path ${destPath} already exists.`)
+                : self.moveToDestParent(source, sourcePath, destPath);
+            })()
+          : exception(`The path ${sourcePath} is a file.`)
+        : exception(`Cannot copy path ${sourcePath} into itself.`)
+      : exception(`The path ${sourcePath} does not exist.`);
+  }
 
-    return !isChild(sourcePath, destPath)
-      ? (() => {
-          const self = this;
+  private moveAndDeleteOriginal(
+    source: TreeNode,
+    sourcePath: string,
+    newName: string,
+    destDirPath: string
+  ) {
+    const treeNode: TreeNode = {
+      ...source,
+      name: newName
+    };
+    this.fsTree = cloneDirWithModification(this.fsTree, destDirPath, dir => ({
+      name: dir.name,
+      contents: dir.contents.concat(treeNode)
+    }));
+    //Delete source
+    this._remove(sourcePath);
+  }
 
-          const source = this.getNode(sourcePath);
-          return source
-            ? (() => {
-                const dest = self.getNode(destPath);
-                return dest
-                  ? isDir(dest)
-                    ? moveAndDeleteOriginal(
-                        source,
-                        sourcePath,
-                        source.name,
-                        destPath
-                      )
-                    : options.force
-                      ? (() => {
-                          self._remove(destPath, { force: false });
-                          moveToDestParent(source, sourcePath, destPath);
-                        })()
-                      : exception(`The path ${destPath} already exists.`)
-                  : moveToDestParent(source, sourcePath, destPath);
-              })()
-            : exception(`The path ${sourcePath} does not exist.`);
-        })()
-      : exception(`Cannot copy path ${sourcePath} into itself.`);
+  private moveToDestParent(
+    source: TreeNode,
+    sourcePath: string,
+    destPath: string
+  ) {
+    const destParentPath = getParentPath(destPath);
+    const destParent = this.getNode(destParentPath);
+    return destParent
+      ? this.moveAndDeleteOriginal(
+          source,
+          sourcePath,
+          getNodeName(destPath),
+          getParentPath(destPath)
+        )
+      : exception(`The path ${destParentPath} does not exist.`);
   }
 
   /*
@@ -388,7 +429,7 @@ export default class Disk {
       ? (() => {
           const node = this.getNode(path);
           return node
-            ? !isDir(node)
+            ? isFile(node)
               ? node.contents
               : exception(`The path ${path} is a directory.`)
             : exception(`The path ${path} does not exist.`);
@@ -399,7 +440,7 @@ export default class Disk {
   /*
     Read a directory
   */
-  readDir(path: string) {
+  async readDir(path: string) {
     return this._readDir(path);
   }
   private _readDir(path: string) {
@@ -412,7 +453,7 @@ export default class Disk {
   /*
     Read a directory recursively.
   */
-  readDirRecursive(path: string): string[] {
+  async readDirRecursive(path: string) {
     return this._readDirRecursive(path);
   }
 
@@ -438,14 +479,55 @@ export default class Disk {
       : exception(`The path ${path} does not exist.`);
   }
 
-  /*
-    Delete a directory or file. Similar to rm -f.
-  */
-  async remove(path: string, options = { force: true }) {
-    return this._remove(path, options);
+  async removeFile(path: string, options = { force: true }) {
+    return this._removeFile(path, options);
   }
 
-  private _remove(path: string, options: { force: boolean }): void {
+  private _removeFile(path: string, options = { force: true }) {
+    const node = this.getNode(path);
+    return node
+      ? isFile(node)
+        ? (() => {
+            this.fsTree = cloneDirWithModification(
+              this.fsTree,
+              getParentPath(path),
+              dir => ({
+                name: dir.name,
+                contents: dir.contents.filter(c => c.name !== getNodeName(path))
+              })
+            );
+          })()
+        : exception(`The path ${path} is a directory.`)
+      : options.force
+        ? undefined
+        : exception(`The path ${path} does not exist.`);
+  }
+
+  async removeDir(path: string, options = { force: true }) {
+    return this._removeDir(path, options);
+  }
+
+  private _removeDir(path: string, options = { force: true }) {
+    const node = this.getNode(path);
+    return node
+      ? isDir(node)
+        ? (() => {
+            this.fsTree = cloneDirWithModification(
+              this.fsTree,
+              getParentPath(path),
+              dir => ({
+                name: dir.name,
+                contents: dir.contents.filter(c => c.name !== getNodeName(path))
+              })
+            );
+          })()
+        : exception(`The path ${path} is a file.`)
+      : options.force
+        ? undefined
+        : exception(`The path ${path} does not exist.`);
+  }
+
+  private _remove(path: string) {
     const node = this.getNode(path);
     return node
       ? (() => {
@@ -458,8 +540,6 @@ export default class Disk {
             })
           );
         })()
-      : options.force
-        ? undefined
-        : exception(`The path ${path} does not exist.`);
+      : exception(`The path ${path} does not exist.`);
   }
 }

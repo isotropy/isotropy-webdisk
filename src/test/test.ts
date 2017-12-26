@@ -93,7 +93,9 @@ describe("Isotropy FS", () => {
     } catch (_ex) {
       ex = _ex;
     }
-    ex.message.should.equal("The path /docs/missing-report.txt does not exist.");
+    ex.message.should.equal(
+      "The path /docs/missing-report.txt does not exist."
+    );
   });
 
   /* readDir */
@@ -197,37 +199,31 @@ describe("Isotropy FS", () => {
   it(`Removes a file or directory`, async () => {
     const path = "/pics";
     const disk = await webdisk.open();
-    await disk.remove(path);
+    await disk.removeDir(path);
     const dir = findDir(disk.__data(), "/");
     dir.contents.length.should.equal(1);
-  });
-
-  /* move */
-  it(`Moves a file or directory`, async () => {
-    const path = "/pics/large-pics/backup";
-    const newPath = "/";
-    const disk = await webdisk.open();
-    await disk.move(path, newPath);
-    const loopDir = find(disk.__data(), "/");
-    loopDir.contents.length.should.equal(3);
-    const largePicsDir = findDir(
-      disk.__data(),
-      "/pics/large-pics"
-    );
-    largePicsDir.contents.length.should.equal(2);
   });
 
   it(`Renames a file or directory`, async () => {
     const path = "/pics/large-pics/backup";
     const newPath = "/pics/large-pics/storage";
     const disk = await webdisk.open();
-    await disk.move(path, newPath);
-    const largePicsDir = findDir(
-      disk.__data(),
-      "/pics/large-pics"
-    );
+    await disk.moveDir(path, newPath);
+    const largePicsDir = findDir(disk.__data(), "/pics/large-pics");
     should.not.exist(largePicsDir.contents.find(x => x.name === "backup"));
     should.exist(largePicsDir.contents.find(x => x.name === "storage"));
+  });
+
+  /* move */
+  it(`Moves a file or directory to parent`, async () => {
+    const path = "/pics/large-pics/backup";
+    const newPath = "/";
+    const disk = await webdisk.open();
+    await disk.moveDir(path, newPath);
+    const loopDir = find(disk.__data(), "/");
+    loopDir.contents.length.should.equal(3);
+    const largePicsDir = findDir(disk.__data(), "/pics/large-pics");
+    largePicsDir.contents.length.should.equal(2);
   });
 
   it(`Fails to move a directory into an existing file path`, async () => {
@@ -236,7 +232,7 @@ describe("Isotropy FS", () => {
     let ex;
     try {
       const disk = await webdisk.open();
-      await disk.move(path, newPath);
+      await disk.moveDir(path, newPath);
     } catch (_ex) {
       ex = _ex;
     }
@@ -249,7 +245,7 @@ describe("Isotropy FS", () => {
     let ex;
     try {
       const disk = await webdisk.open();
-      await disk.move(path, newPath);
+      await disk.moveDir(path, newPath);
     } catch (_ex) {
       ex = _ex;
     }
