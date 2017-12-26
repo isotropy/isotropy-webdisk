@@ -40,182 +40,182 @@ describe("Isotropy FS", () => {
 
   /* createFile */
 
-  // it(`Creates a file`, async () => {
-  //   const disk = await webdisk.open();
-  //   await disk.createFile(
-  //     "/docs/planet-report.txt",
-  //     "We're recommending that pluto be a planet."
-  //   );
-  //   const file = find(disk.__data(), "/docs/planet-report.txt");
-  //   file.name.should.equal("planet-report.txt");
-  //   file.contents.should.equal("We're recommending that pluto be a planet.");
-  // });
+  it(`Creates a file`, async () => {
+    const disk = await webdisk.open();
+    await disk.createFile(
+      "/docs/planet-report.txt",
+      "We're recommending that pluto be a planet."
+    );
+    const file = find(disk.__data(), "/docs/planet-report.txt");
+    file.name.should.equal("planet-report.txt");
+    file.contents.should.equal("We're recommending that pluto be a planet.");
+  });
 
-  // it(`Creates or overwrites a file`, async () => {
-  //   const path = "/docs/report.txt";
-  //   const filename = "report.txt";
-  //   const disk = await webdisk.open();
-  //   await disk.createFile(path, "Pluto is a planet.", { overwrite: true });
-  //   const file = find(disk.__data(), path);
-  //   file.name.should.equal(filename);
-  //   file.contents.should.equal("Pluto is a planet.");
-  // });
+  it(`Creates or overwrites a file`, async () => {
+    const path = "/docs/report.txt";
+    const filename = "report.txt";
+    const disk = await webdisk.open();
+    await disk.createFile(path, "Pluto is a planet.", { force: true });
+    const file = find(disk.__data(), path);
+    file.name.should.equal(filename);
+    file.contents.should.equal("Pluto is a planet.");
+  });
 
-  // it(`Fails to overwrite existing file`, async () => {
-  //   const path = "/docs/report.txt";
-  //   const filename = "report.txt";
-  //   let ex;
-  //   try {
-  //     const disk = await webdisk.open();
-  //     await disk.createFile(path, "Pluto is a planet.", { overwrite: false });
-  //   } catch (_ex) {
-  //     ex = _ex;
-  //   }
-  //   ex.message.should.equal("The path /docs/report.txt already exists.");
-  // });
+  it(`Fails to overwrite existing file`, async () => {
+    const path = "/docs/report.txt";
+    const filename = "report.txt";
+    let ex;
+    try {
+      const disk = await webdisk.open();
+      await disk.createFile(path, "Pluto is a planet.", { force: false });
+    } catch (_ex) {
+      ex = _ex;
+    }
+    ex.message.should.equal("The path /docs/report.txt already exists.");
+  });
 
-  // /* readFile */
-  // it(`Reads a file`, async () => {
-  //   const path = "/docs/report.txt";
-  //   const filename = "report.txt";
-  //   const disk = await webdisk.open();
-  //   const contents = await disk.readFile(path);
-  //   contents.should.equal("Pluto downgraded to a rock.");
-  // });
+  /* readFile */
+  it(`Reads a file`, async () => {
+    const path = "/docs/report.txt";
+    const filename = "report.txt";
+    const disk = await webdisk.open();
+    const contents = await disk.readFile(path);
+    contents.should.equal("Pluto downgraded to a rock.");
+  });
 
-  // /* readFile */
-  // it(`Fails to read a missing file`, async () => {
-  //   const path = "/docs/missing-report.txt";
-  //   let ex;
-  //   try {
-  //     const disk = await webdisk.open();
-  //     const contents = await disk.readFile(path);
-  //   } catch (_ex) {
-  //     ex = _ex;
-  //   }
-  //   ex.message.should.equal("The path /docs/missing-report.txt does not exist.");
-  // });
+  /* readFile */
+  it(`Fails to read a missing file`, async () => {
+    const path = "/docs/missing-report.txt";
+    let ex;
+    try {
+      const disk = await webdisk.open();
+      const contents = await disk.readFile(path);
+    } catch (_ex) {
+      ex = _ex;
+    }
+    ex.message.should.equal("The path /docs/missing-report.txt does not exist.");
+  });
 
-  // /* readDir */
-  // it(`Reads a directory`, async () => {
-  //   const path = "/pics";
-  //   const disk = await webdisk.open();
-  //   const files = await disk.readDir(path);
-  //   files.should.deepEqual([
-  //     "/pics/asterix.jpg",
-  //     "/pics/obelix.jpg",
-  //     "/pics/large-pics"
-  //   ]);
-  // });
+  /* readDir */
+  it(`Reads a directory`, async () => {
+    const path = "/pics";
+    const disk = await webdisk.open();
+    const files = await disk.readDir(path);
+    files.should.deepEqual([
+      "/pics/asterix.jpg",
+      "/pics/obelix.jpg",
+      "/pics/large-pics"
+    ]);
+  });
 
-  // it(`Fails to read missing directory`, async () => {
-  //   const path = "/pics/missing";
-  //   let ex;
-  //   try {
-  //     const disk = await webdisk.open();
-  //     const files = await disk.readDir(path);
-  //   } catch (_ex) {
-  //     ex = _ex;
-  //   }
-  //   ex.message.should.equal("The path /pics/missing does not exist.");
-  // });
+  it(`Fails to read missing directory`, async () => {
+    const path = "/pics/missing";
+    let ex;
+    try {
+      const disk = await webdisk.open();
+      const files = await disk.readDir(path);
+    } catch (_ex) {
+      ex = _ex;
+    }
+    ex.message.should.equal("The path /pics/missing does not exist.");
+  });
 
-  // /* readDirRecursive */
-  // it(`Reads a directory recursively`, async () => {
-  //   const path = "/pics";
-  //   const disk = await webdisk.open();
-  //   const files = await disk.readDirRecursive(path);
-  //   files.should.deepEqual([
-  //     "/pics/asterix.jpg",
-  //     "/pics/obelix.jpg",
-  //     "/pics/large-pics",
-  //     "/pics/large-pics/asterix-large.jpg",
-  //     "/pics/large-pics/obelix-large.jpg",
-  //     "/pics/large-pics/backup",
-  //     "/pics/large-pics/backup/asterix-large-bak.jpg",
-  //     "/pics/large-pics/backup/obelix-large-bak.jpg"
-  //   ]);
-  // });
+  /* readDirRecursive */
+  it(`Reads a directory recursively`, async () => {
+    const path = "/pics";
+    const disk = await webdisk.open();
+    const files = await disk.readDirRecursive(path);
+    files.should.deepEqual([
+      "/pics/asterix.jpg",
+      "/pics/obelix.jpg",
+      "/pics/large-pics",
+      "/pics/large-pics/asterix-large.jpg",
+      "/pics/large-pics/obelix-large.jpg",
+      "/pics/large-pics/backup",
+      "/pics/large-pics/backup/asterix-large-bak.jpg",
+      "/pics/large-pics/backup/obelix-large-bak.jpg"
+    ]);
+  });
 
-  // /* createDir */
-  // it(`Creates a directory`, async () => {
-  //   const path = "/pics/secret";
-  //   const disk = await webdisk.open();
-  //   await disk.createDir(path);
-  //   const dir = findDir(disk.__data(), "/pics/secret");
-  //   dir.name.should.equal("secret");
-  //   dir.contents.should.be.an.instanceOf(Array);
-  // });
+  /* createDir */
+  it(`Creates a directory`, async () => {
+    const path = "/pics/secret";
+    const disk = await webdisk.open();
+    await disk.createDir(path);
+    const dir = findDir(disk.__data(), "/pics/secret");
+    dir.name.should.equal("secret");
+    dir.contents.should.be.an.instanceOf(Array);
+  });
 
-  // /* createDir */
-  // it(`Fails to create a directory if it exists.`, async () => {
-  //   const path = "/docs";
-  //   const disk = await webdisk.open();
-  //   let ex;
-  //   try {
-  //     const disk = await webdisk.open();
-  //     await disk.createDir(path);
-  //   } catch (_ex) {
-  //     ex = _ex;
-  //   }
-  //   ex.message.should.equal("The path /docs already exists.");
-  // });
+  /* createDir */
+  it(`Fails to create a directory if it exists.`, async () => {
+    const path = "/docs";
+    const disk = await webdisk.open();
+    let ex;
+    try {
+      const disk = await webdisk.open();
+      await disk.createDir(path);
+    } catch (_ex) {
+      ex = _ex;
+    }
+    ex.message.should.equal("The path /docs already exists.");
+  });
 
-  // /* createDir */
-  // it(`Doesn't fail if the directory exists during createDir() with the ignoreIfExists option.`, async () => {
-  //   const path = "/docs";
-  //   const disk = await webdisk.open();
-  //   await disk.createDir(path, { ignoreIfExists: true });
-  //   const dir = find(disk.__data(), "/docs");
-  //   should.exist(dir);
-  // });
+  /* createDir */
+  it(`Doesn't fail if the directory exists during createDir() with the ignoreIfExists option.`, async () => {
+    const path = "/docs";
+    const disk = await webdisk.open();
+    await disk.createDir(path, { ignoreIfExists: true });
+    const dir = find(disk.__data(), "/docs");
+    should.exist(dir);
+  });
 
-  // /* createDir */
-  // it(`Fails if a file exists at the same path even with the ignoreIfExists option.`, async () => {
-  //   const path = "/docs/links";
-  //   const disk = await webdisk.open();
-  //   let ex;
-  //   try {
-  //     const disk = await webdisk.open();
-  //     await disk.createDir(path, { ignoreIfExists: true });
-  //   } catch (_ex) {
-  //     ex = _ex;
-  //   }
-  //   ex.message.should.equal("The path /docs/links is already a file.");
-  // });
+  /* createDir */
+  it(`Fails if a file exists at the same path even with the ignoreIfExists option.`, async () => {
+    const path = "/docs/links";
+    const disk = await webdisk.open();
+    let ex;
+    try {
+      const disk = await webdisk.open();
+      await disk.createDir(path, { ignoreIfExists: true });
+    } catch (_ex) {
+      ex = _ex;
+    }
+    ex.message.should.equal("The path /docs/links is already a file.");
+  });
 
-  // /* createDir */
-  // it(`Creates parent directories with the parents option.`, async () => {
-  //   const path = "/docs/a/b/c";
-  //   const disk = await webdisk.open();
-  //   await disk.createDir(path, { parents: true });
-  //   const dir = find(disk.__data(), "/docs/a/b/c");
-  //   should.exist(dir);
-  // });
+  /* createDir */
+  it(`Creates parent directories with the parents option.`, async () => {
+    const path = "/docs/a/b/c";
+    const disk = await webdisk.open();
+    await disk.createDir(path, { parents: true });
+    const dir = find(disk.__data(), "/docs/a/b/c");
+    should.exist(dir);
+  });
 
-  // /* Removes */
-  // it(`Removes a file or directory`, async () => {
-  //   const path = "/pics";
-  //   const disk = await webdisk.open();
-  //   await disk.remove(path);
-  //   const dir = findDir(disk.__data(), "/");
-  //   dir.contents.length.should.equal(1);
-  // });
+  /* Removes */
+  it(`Removes a file or directory`, async () => {
+    const path = "/pics";
+    const disk = await webdisk.open();
+    await disk.remove(path);
+    const dir = findDir(disk.__data(), "/");
+    dir.contents.length.should.equal(1);
+  });
 
-  // /* move */
-  // it(`Moves a file or directory`, async () => {
-  //   const path = "/pics/large-pics/backup";
-  //   const newPath = "/";
-  //   const disk = await webdisk.open();
-  //   await disk.move(path, newPath);
-  //   const loopDir = find(disk.__data(), "/");
-  //   loopDir.contents.length.should.equal(3);
-  //   const largePicsDir = findDir(
-  //     disk.__data(),
-  //     "/pics/large-pics"
-  //   );
-  //   largePicsDir.contents.length.should.equal(2);
-  // });
+  /* move */
+  it(`Moves a file or directory`, async () => {
+    const path = "/pics/large-pics/backup";
+    const newPath = "/";
+    const disk = await webdisk.open();
+    await disk.move(path, newPath);
+    const loopDir = find(disk.__data(), "/");
+    loopDir.contents.length.should.equal(3);
+    const largePicsDir = findDir(
+      disk.__data(),
+      "/pics/large-pics"
+    );
+    largePicsDir.contents.length.should.equal(2);
+  });
 
   it(`Renames a file or directory`, async () => {
     const path = "/pics/large-pics/backup";
@@ -230,29 +230,29 @@ describe("Isotropy FS", () => {
     should.exist(largePicsDir.contents.find(x => x.name === "storage"));
   });
 
-  // it(`Fails to move a directory into an existing file path`, async () => {
-  //   const path = "/pics/large-pics/backup";
-  //   const newPath = "/pics/asterix.jpg";
-  //   let ex;
-  //   try {
-  //     const disk = await webdisk.open();
-  //     await disk.move(path, newPath);
-  //   } catch (_ex) {
-  //     ex = _ex;
-  //   }
-  //   ex.message.should.equal("The path /pics/asterix.jpg already exists.");
-  // });
+  it(`Fails to move a directory into an existing file path`, async () => {
+    const path = "/pics/large-pics/backup";
+    const newPath = "/pics/asterix.jpg";
+    let ex;
+    try {
+      const disk = await webdisk.open();
+      await disk.move(path, newPath);
+    } catch (_ex) {
+      ex = _ex;
+    }
+    ex.message.should.equal("The path /pics/asterix.jpg already exists.");
+  });
 
-  // it(`Fails to move a directory into a sub-directory`, async () => {
-  //   const path = "/pics";
-  //   const newPath = "/pics/large-pics";
-  //   let ex;
-  //   try {
-  //     const disk = await webdisk.open();
-  //     await disk.move(path, newPath);
-  //   } catch (_ex) {
-  //     ex = _ex;
-  //   }
-  //   ex.message.should.equal("Cannot move to the same path /pics.");
-  // });
+  it(`Fails to move a directory into a sub-directory`, async () => {
+    const path = "/pics";
+    const newPath = "/pics/large-pics";
+    let ex;
+    try {
+      const disk = await webdisk.open();
+      await disk.move(path, newPath);
+    } catch (_ex) {
+      ex = _ex;
+    }
+    ex.message.should.equal("Cannot copy path /pics into itself.");
+  });
 });

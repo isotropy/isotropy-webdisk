@@ -1,7 +1,5 @@
 import exception from "./exception";
 import WebDisk, { FileNode, DirNode, TreeNode } from "./isotropy-webdisk";
-import { debuglog } from "util";
-import { EISDIR } from "constants";
 
 function toParts(path: string) {
   const parts = path.split("/");
@@ -128,20 +126,85 @@ export default class Disk {
   }
 
   /*
+    Copy a file
+  */
+  private _copyFile(
+    sourcePath: string,
+    destPath: string,
+    options: { force: false }
+  ) {
+    const self = this;
+
+    function copyToDir(
+      source: FileNode,
+      sourcePath: string,
+      newName: string,
+      destDirPath: string
+    ) {
+      const file: FileNode = {
+        ...source,
+        name: newName
+      };
+
+      self.fsTree = cloneDirWithModification(self.fsTree, destDirPath, dir => ({
+        name: dir.name,
+        contents: dir.contents.concat(file)
+      }));
+
+      self._remove(sourcePath, { force: false });
+    }
+
+    const source = this.getNode(sourcePath);
+    return source
+      ? !isDir(source)
+        ? () => {
+            const dest = this.getNode(destPath);
+            return dest
+              ? //If dest is a directory we copy into it
+                isDir(dest)
+                ? copyToDir(source, sourcePath, source.name, destPath)
+                : //If dest is not a directory, copy if force option is set
+                  options.force
+                  ? copyToDir(
+                      source,
+                      sourcePath,
+                      getNodeName(destPath),
+                      getParentPath(destPath)
+                    )
+                  : exception(`The path ${destPath} already exists.`)
+              : //dest does not exist
+                () => {
+                  const parentPath = getParentPath(destPath);
+                  const parent = this.getNode(parentPath);
+
+                  //See if parent exists
+                  return parent
+                    ? copyToDir(
+                        source,
+                        sourcePath,
+                        getNodeName(destPath),
+                        parentPath
+                      )
+                    : exception(`The path ${parentPath} does not exist.`);
+                };
+          }
+        : exception(
+            `The path ${sourcePath} is a directory. Use copyDir() instead.`
+          )
+      : exception(`The path ${sourcePath} does not exist.`);
+  }
+
+  /*
     Create a file.
   */
-  async createFile(
-    path: string,
-    contents: string,
-    options = { overwrite: true }
-  ) {
+  async createFile(path: string, contents: string, options = { force: true }) {
     return this._createFile(path, contents, options);
   }
 
   private _createFile(
     path: string,
     contents: string,
-    options = { overwrite: true }
+    options = { force: true }
   ) {
     const self = this;
     return isValidFilePath(path)
@@ -156,7 +219,7 @@ export default class Disk {
                   dir => {
                     const filename = getFilename(path);
                     return !dir.contents.find(x => x.name === filename) ||
-                      options.overwrite
+                      options.force
                       ? {
                           name: dir.name,
                           contents: dir.contents
@@ -238,54 +301,50 @@ export default class Disk {
   /*
     Move a directory or file. Similar to mv.
   */
-  async move(path: string, newPath: string, options = { overwrite: false }) {
+  async move(path: string, newPath: string, options = { force: false }) {
     return this._move(path, newPath, options);
   }
 
   private _move(
     sourcePath: string,
     destPath: string,
-    options: { overwrite: boolean }
+    options: { force: boolean }
   ) {
     const self = this;
 
-    function _moveDir(
-      source: DirNode,
-      dest: TreeNode | undefined,
-      options: { overwrite: boolean }
+    function moveAndDeleteOriginal(
+      source: TreeNode,
+      sourcePath: string,
+      newName: string,
+      destDirPath: string
     ) {
-      //If dest exists, it needs to be a directory.
-      return dest
-        ? isDir(dest)
-          ? moveToDestination(source, source.name, destPath)
-          : exception(`Cannot move ${sourcePath} into file ${destPath}.`)
-        : moveToDestination(source, getNodeName(destPath), getParentPath(destPath));
-    }
-
-    function _moveFile(
-      source: FileNode,
-      dest: TreeNode | undefined,
-      options: { overwrite: boolean }
-    ) {
-      //If dest exists, it needs to be a directory.
-      return dest
-        ? isDir(dest)
-          ? moveToDestination(source, sourcePath, destPath)
-          : exception(`The path ${destPath} already exists.`)
-        : moveToDestination(source, getNodeName(destPath), getParentPath(destPath));
-    }
-
-    function moveToDestination(source: TreeNode, sourceName: string, destPath: string) {
       const treeNode: TreeNode = {
-        name: sourceName,
-        ...source
-      }
-      self.fsTree = cloneDirWithModification(self.fsTree, destPath, dir => ({
+        ...source,
+        name: newName
+      };
+      self.fsTree = cloneDirWithModification(self.fsTree, destDirPath, dir => ({
         name: dir.name,
         contents: dir.contents.concat(treeNode)
       }));
       //Delete source
       self._remove(sourcePath, { force: false });
+    }
+
+    function moveToDestParent(
+      source: TreeNode,
+      sourcePath: string,
+      destPath: string
+    ) {
+      const destParentPath = getParentPath(destPath);
+      const destParent = self.getNode(destParentPath);
+      return destParent
+        ? moveAndDeleteOriginal(
+            source,
+            sourcePath,
+            getNodeName(destPath),
+            getParentPath(destPath)
+          )
+        : exception(`Thep path ${destParentPath} does not exist.`);
     }
 
     return !isChild(sourcePath, destPath)
@@ -296,9 +355,21 @@ export default class Disk {
           return source
             ? (() => {
                 const dest = self.getNode(destPath);
-                return isDir(source)
-                  ? _moveDir(source, dest, options)
-                  : _moveFile(source, dest, options);
+                return dest
+                  ? isDir(dest)
+                    ? moveAndDeleteOriginal(
+                        source,
+                        sourcePath,
+                        source.name,
+                        destPath
+                      )
+                    : options.force
+                      ? (() => {
+                          self._remove(destPath, { force: false });
+                          moveToDestParent(source, sourcePath, destPath);
+                        })()
+                      : exception(`The path ${destPath} already exists.`)
+                  : moveToDestParent(source, sourcePath, destPath);
               })()
             : exception(`The path ${sourcePath} does not exist.`);
         })()
