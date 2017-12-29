@@ -1,5 +1,5 @@
 import exception from "./exception";
-import WebDisk, { FileNode, DirNode, TreeNode } from "./isotropy-webdisk";
+import { WebDisk, FileNode, DirNode, TreeNode } from "./isotropy-webdisk";
 
 function toParts(path: string) {
   const parts = path.split("/");

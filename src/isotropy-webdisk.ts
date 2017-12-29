@@ -14,7 +14,7 @@ export type TreeNode = FileNode | DirNode;
 
 const disks: { [key: string]: Disk } = {};
 
-export default class WebDisk {
+export class WebDisk {
   disk: Disk;
   originalTree: DirNode[];
 
@@ -31,4 +31,8 @@ export default class WebDisk {
     await this.disk.open();
     return this.disk;
   }
+}
+
+export default function create(tree: DirNode[]) : WebDisk {
+  return new WebDisk(tree);
 }
