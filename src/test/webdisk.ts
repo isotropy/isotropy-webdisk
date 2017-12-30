@@ -1,6 +1,6 @@
-import create, { WebDisk } from "../isotropy-webdisk";
+import { webdisk, WebDisk } from "../isotropy-webdisk";
 
-export default create([
+export default webdisk([
   {
     name: "docs",
     contents: [

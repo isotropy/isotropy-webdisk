@@ -33,6 +33,6 @@ export class WebDisk {
   }
 }
 
-export default function create(tree: DirNode[]) : WebDisk {
+export function webdisk(tree: DirNode[]) : WebDisk {
   return new WebDisk(tree);
 }
