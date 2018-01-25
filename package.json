@@ -1,6 +1,6 @@
 {
   "name": "isotropy-webdisk",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "author": "Isotropy Team<isotropy@agilehead.com>",
   "contributors": [
     "Jeswin Kumar<jeswinpk@agilehead.com>"
@@ -12,10 +12,11 @@
   },
   "main": "dist/isotropy-webdisk.js",
   "types": "dist/isotropy-webdisk.d.ts",
-  "dependencies": {},
+  "dependencies": {
+    "@types/node": "^8.0.57"
+  },
   "devDependencies": {
     "@types/mocha": "^2.2.44",
-    "@types/node": "^8.0.57",
     "@types/should": "^11.2.0",
     "mocha": "*",
     "should": "*"
